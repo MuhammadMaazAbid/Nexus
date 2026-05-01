@@ -61,11 +61,6 @@ app.UseCors("AllowAll");
 
 app.UseHttpsRedirection();
 
-app.UseCors("AllowAll");
-
-app.UseAuthorization();
-
-app.UseCors("AllowAll");
 app.UseAuthentication(); // MUST come before Authorization
 app.UseAuthorization();
 

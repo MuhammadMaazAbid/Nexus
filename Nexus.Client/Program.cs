@@ -20,5 +20,4 @@ builder.Services.AddAuthorizationCore();
 // Tell the app to use your Custom security brain
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 
-
 await builder.Build().RunAsync();

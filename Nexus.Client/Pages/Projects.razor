@@ -1,7 +1,9 @@
 ﻿@page "/projects"
+@rendermode InteractiveWebAssembly
 @attribute [Authorize]
 @using Nexus.Shared.Models
 @inject HttpClient Http
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 
 <PageTitle>Projects | Nexus</PageTitle>
 
@@ -109,6 +111,13 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // 1. GRAB THE TOKEN AND ATTACH IT TO THE HTTP CLIENT
+        var token = await LocalStorage.GetItemAsync<string>("authToken");
+        if (!string.IsNullOrEmpty(token))
+        {
+            Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+
         await LoadProjects();
     }
 
@@ -116,7 +125,17 @@
     {
         try
         {
-            projects = await Http.GetFromJsonAsync<List<Project>>("api/Projects") ?? new List<Project>();
+            projects = await Http.GetFromJsonAsync<List<Project>>("api/Projects");
+            if (projects == null)
+            {
+                Console.WriteLine("No projects returned from API.");
+                projects = new List<Project>();
+            }
+        }
+        catch (HttpRequestException httpEx)
+        {
+            Console.WriteLine($"HTTP error: {httpEx.Message}");
+            projects = new List<Project>();
         }
         catch (Exception ex)
         {
@@ -127,7 +146,12 @@
 
     private void ShowModal()
     {
-        newProject = new Project();
+        // 2. SATISFY THE SQL DATABASE REQUIREMENTS
+        newProject = new Project
+        {
+            CreatedAt = DateTime.UtcNow,
+            CreatedByUserId = 1 // Hardcoded to your Admin ID for now
+        };
         isModalVisible = true;
     }
 
@@ -146,8 +170,13 @@
             
             if (response.IsSuccessStatusCode)
             {
-                await LoadProjects();
-                CloseModal();
+                await LoadProjects(); // Refresh the list
+                CloseModal();         // Close the modal
+            }
+            else
+            {
+                // If it fails, log the exact error code to the browser console for debugging
+                Console.WriteLine($"Server rejected save: {response.StatusCode}");
             }
         }
         catch (Exception ex)

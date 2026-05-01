@@ -1,0 +1,165 @@
+﻿@page "/profile"
+@page "/profile/{TargetUserId:int}"
+@rendermode InteractiveWebAssembly
+@attribute [Authorize]
+@using Nexus.Shared.Models
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<PageTitle>Profile | Insightify</PageTitle>
+
+<div class="container mt-4 mb-5">
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center align-items-center" style="height: 50vh;">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (userProfile == null)
+    {
+        <div class="text-center py-5 mt-5">
+            <i class="bi bi-person-x display-1 text-muted opacity-50 mb-3 d-block"></i>
+            <h3 class="fw-bold">User Not Found</h3>
+            <p class="text-muted">The workspace member you are looking for does not exist.</p>
+            <button class="btn btn-primary rounded-pill px-4" @onclick='() => Nav.NavigateTo("/")'>Return to Dashboard</button>
+        </div>
+    }
+    else
+    {
+        <!-- Profile Header Card -->
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+            <!-- Decorative Banner -->
+            <div class="bg-primary" style="height: 120px; background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);"></div>
+            
+            <div class="card-body px-5 pb-5 position-relative">
+                <!-- Avatar (Calculated via C#) -->
+                <div class="position-absolute translate-middle-y rounded-circle border border-4 border-white bg-light d-flex justify-content-center align-items-center shadow-sm"
+                     style="width: 100px; height: 100px; top: 0; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+                    <span class="fs-2 fw-bold text-primary">@GetInitials(userProfile.FullName)</span>
+                </div>
+
+                <div class="mt-5 pt-3 d-flex justify-content-between align-items-start">
+                    <div>
+                        <h2 class="fw-bold mb-0">@userProfile.FullName</h2>
+                        <p class="text-muted fs-5 mb-2">@userProfile.Email</p>
+                        <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3 py-2 fw-medium">
+                            <i class="bi bi-shield-check me-1"></i> @(string.IsNullOrEmpty(userProfile.Role) ? "Member" : userProfile.Role)
+                        </span>
+                    </div>
+                    
+                    @if (!isOwnProfile)
+                    {
+                        <button class="btn btn-outline-primary rounded-pill px-4 shadow-sm">
+                            <i class="bi bi-envelope me-2"></i> Message
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-light border rounded-pill px-4 shadow-sm text-muted">
+                            <i class="bi bi-pencil me-2"></i> Edit Profile
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Activity & Details Grid -->
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-body p-4">
+                        <h6 class="fw-bold text-uppercase text-muted mb-4">Account Details</h6>
+                        
+                        <div class="mb-3">
+                            <small class="text-muted d-block mb-1">Joined Workspace</small>
+                            <span class="fw-medium">@userProfile.CreatedAt.ToString("MMMM dd, yyyy")</span>
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted d-block mb-1">Status</small>
+                            <span class="d-flex align-items-center fw-medium">
+                                <span class="bg-success rounded-circle me-2" style="width: 8px; height: 8px;"></span> Active
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-8">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h6 class="fw-bold text-uppercase text-muted mb-0">Recent Activity</h6>
+                        </div>
+                        
+                        <!-- Placeholder for future integration -->
+                        <div class="text-center py-5 bg-light rounded-3">
+                            <i class="bi bi-activity text-muted fs-2 mb-2 d-block opacity-50"></i>
+                            <p class="text-muted mb-0">Activity timeline will be deployed in v2.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int? TargetUserId { get; set; }
+
+    private User? userProfile;
+    private bool isLoading = true;
+    private bool isOwnProfile = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserProfile();
+    }
+
+    // React to URL changes (e.g., clicking from User 2's profile to User 3's profile)
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadUserProfile();
+    }
+
+    private async Task LoadUserProfile()
+    {
+        isLoading = true;
+        try
+        {
+            if (TargetUserId.HasValue)
+            {
+                // Looking at someone else's profile
+                isOwnProfile = false;
+                userProfile = await Http.GetFromJsonAsync<User>($"api/Users/{TargetUserId.Value}");
+            }
+            else
+            {
+                // Looking at our own profile.
+                // Note: You need a backend endpoint that identifies the user from the JWT token!
+                isOwnProfile = true;
+                userProfile = await Http.GetFromJsonAsync<User>("api/Users/me");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading profile: {ex.Message}");
+            userProfile = null;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    // The C# "Initials" helper function
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "UX";
+        
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][..1].ToUpper();
+        
+        return $"{parts[0][..1]}{parts[^1][..1]}".ToUpper();
+    }
+}

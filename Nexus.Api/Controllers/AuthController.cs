@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using BCryptNet = BCrypt.Net.BCrypt;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -39,7 +40,7 @@ namespace Nexus.Api.Controllers
                 FullName = request.FullName,
                 Email = request.Email,
                 PasswordHash = passwordHash,
-                Role = "Admin", // Defaulting first user to Admin for your startup
+                Role = "Member", // Defaulting first user to Admin for your startup
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -57,7 +58,7 @@ namespace Nexus.Api.Controllers
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
 
             // 2. Verify existence and password hash
-            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            if (user is null || !BCryptNet.Verify(request.Password, user.PasswordHash))
             {
                 return Unauthorized("Invalid email or password.");
             }
