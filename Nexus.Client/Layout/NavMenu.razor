@@ -1,6 +1,11 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
+
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">Nexus.Client</a>
+        <a class="navbar-brand fw-bold" href="">NEXUS</a>
         <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
             <span class="navbar-toggler-icon"></span>
         </button>
@@ -9,31 +14,73 @@
 
 <div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
     <nav class="nav flex-column">
+        
+        <!-- Dashboard: Always visible or public-facing -->
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+                <span class="bi bi-grid-fill" aria-hidden="true"></span> Dashboard
             </NavLink>
         </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
+
+        <AuthorizeView>
+            <Authorized>
+                <!-- Private Workspace: Only visible when logged in -->
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="projects">
+                        <span class="bi bi-briefcase-fill" aria-hidden="true"></span> Projects
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="tickets">
+                        <span class="bi bi-ticket-detailed-fill" aria-hidden="true"></span> Tickets
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="team">
+                        <span class="bi bi-people-fill" aria-hidden="true"></span> Team
+                    </NavLink>
+                </div>
+
+                <hr class="text-white-50 mx-3" />
+
+                <!-- Logout Button -->
+                <div class="nav-item px-3">
+                    <button class="nav-link btn btn-link text-start w-100 text-danger border-0 shadow-none" @onclick="HandleLogout">
+                        <span class="bi bi-box-arrow-right" aria-hidden="true"></span> Logout
+                    </button>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <!-- Login Link: Visible only when logged out -->
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="login">
+                        <span class="bi bi-lock-fill" aria-hidden="true"></span> Login
+                    </NavLink>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
     </nav>
 </div>
 
 @code {
     private bool collapseNavMenu = true;
-
     private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
 
     private void ToggleNavMenu()
     {
         collapseNavMenu = !collapseNavMenu;
+    }
+
+    private async Task HandleLogout()
+    {
+        // 1. Remove the JWT from browser storage
+        await LocalStorage.RemoveItemAsync("authToken");
+
+        // 2. Notify the app state that the user is now anonymous
+        var customAuthStateProvider = (Nexus.Client.Security.CustomAuthStateProvider)AuthStateProvider;
+        customAuthStateProvider.MarkUserAsLoggedOut();
+
+        // 3. Redirect to the login page
+        Nav.NavigateTo("login");
     }
 }

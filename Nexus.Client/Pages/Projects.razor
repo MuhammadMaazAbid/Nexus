@@ -1,0 +1,158 @@
+﻿@page "/projects"
+@attribute [Authorize]
+@using Nexus.Shared.Models
+@inject HttpClient Http
+
+<PageTitle>Projects | Nexus</PageTitle>
+
+<div class="container mt-4 mb-5">
+    
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h1 class="fw-bold mb-0" style="letter-spacing: -0.5px;">Projects</h1>
+            <p class="text-muted mb-0">Manage your workspace and team initiatives.</p>
+        </div>
+        <button class="btn btn-primary shadow-sm rounded-pill px-4 transition-all" @onclick="ShowModal">
+            <i class="bi bi-plus-lg me-2"></i>New Project
+        </button>
+    </div>
+
+    @if (projects == null)
+    {
+        <div class="d-flex flex-column justify-content-center align-items-center mt-5" style="height: 40vh;">
+            <div class="spinner-border text-primary border-3" style="width: 3rem; height: 3rem;" role="status"></div>
+            <p class="text-muted mt-3 fw-medium">Syncing with workspace...</p>
+        </div>
+    }
+    else if (projects.Count == 0)
+    {
+        <div class="text-center py-5 rounded-4 bg-light border-0 shadow-sm" style="margin-top: 10vh;">
+            <i class="bi bi-rocket-takeoff text-primary opacity-50" style="font-size: 4rem;"></i>
+            <h3 class="fw-bold mt-3">Welcome to Ground Zero</h3>
+            <p class="text-muted mx-auto" style="max-width: 400px;">
+                Your workspace is a blank canvas. Let's start building something human-centric.
+            </p>
+            <button class="btn btn-primary rounded-pill px-4 mt-2" @onclick="ShowModal">Launch First Project</button>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            @foreach (var project in projects ?? new())
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 shadow-sm border-0 rounded-4 project-card transition-all">
+                        <div class="card-body p-4">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <h5 class="card-title fw-bold mb-0 text-truncate">@project.Name</h5>
+                                <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill">Active</span>
+                            </div>
+                            <p class="card-text text-muted">@project.Description</p>
+                        </div>
+                        <div class="card-footer bg-transparent border-top-0 p-4 pt-0">
+                            <a href="#" class="btn btn-light w-100 rounded-pill fw-medium text-primary">Open Board</a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (isModalVisible)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px);">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                    <div class="modal-header border-bottom-0 pt-4 pb-0 px-4">
+                        <h4 class="modal-title fw-bold">Create Initiative</h4>
+                        <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold text-muted small text-uppercase">Project Name</label>
+                            <input type="text" class="form-control form-control-lg bg-light border-0 shadow-none"
+                                   @bind="newProject.Name" placeholder="e.g., Nexus Core AI" autofocus />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold text-muted small text-uppercase">Project Vision</label>
+                            <textarea class="form-control bg-light border-0 shadow-none" rows="3"
+                                      @bind="newProject.Description" placeholder="What is the core objective?"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top-0 pb-4 px-4 bg-light bg-opacity-50">
+                        <button type="button" class="btn btn-link text-muted text-decoration-none px-4" @onclick="CloseModal">Cancel</button>
+                        <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" @onclick="SaveProject">
+                            <i class="bi bi-check2 me-1"></i> Finalize
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .transition-all {
+        transition: all 0.2s ease-in-out;
+    }
+
+    .project-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08) !important;
+    }
+</style>
+
+@code {
+    private List<Project>? projects;
+    private bool isModalVisible = false;
+    private Project newProject = new Project();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProjects();
+    }
+
+    private async Task LoadProjects()
+    {
+        try
+        {
+            projects = await Http.GetFromJsonAsync<List<Project>>("api/Projects") ?? new List<Project>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"API Connection Error: {ex.Message}");
+            projects = new List<Project>();
+        }
+    }
+
+    private void ShowModal()
+    {
+        newProject = new Project();
+        isModalVisible = true;
+    }
+
+    private void CloseModal()
+    {
+        isModalVisible = false;
+    }
+
+    private async Task SaveProject()
+    {
+        if (string.IsNullOrWhiteSpace(newProject.Name)) return;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/Projects", newProject);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadProjects();
+                CloseModal();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving project: {ex.Message}");
+        }
+    }
+}

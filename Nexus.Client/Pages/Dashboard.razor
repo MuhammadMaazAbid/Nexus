@@ -1,0 +1,205 @@
+﻿@page "/"
+@attribute [Authorize]
+@using Nexus.Shared.Models
+@inject HttpClient Http
+
+<PageTitle>Command Center | Nexus</PageTitle>
+
+<div class="container mt-4 mb-5">
+    <!-- Welcome Header -->
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h1 class="fw-bold mb-0" style="letter-spacing: -0.5px;">Workspace Overview</h1>
+            <p class="text-muted mb-0">Here is what's happening across Insightify today.</p>
+        </div>
+        <div class="text-end text-muted small fw-medium">
+            <i class="bi bi-clock-history me-1"></i> Live Sync Active
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex flex-column justify-content-center align-items-center mt-5" style="height: 40vh;">
+            <div class="spinner-border text-primary border-3" style="width: 3rem; height: 3rem;" role="status"></div>
+            <p class="text-muted mt-3 fw-medium">Compiling workspace analytics...</p>
+        </div>
+    }
+    else
+    {
+        <!-- KPI Metrics Row -->
+        <div class="row g-4 mb-5">
+            <!-- Metric 1: Total Projects -->
+            <div class="col-md-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden metric-card">
+                    <div class="card-body p-4 position-relative">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="text-muted fw-bold text-uppercase mb-0">Active Projects</h6>
+                            <div class="icon-box bg-primary bg-opacity-10 text-primary rounded-circle d-flex justify-content-center align-items-center" style="width: 40px; height: 40px;">
+                                <i class="bi bi-briefcase-fill fs-5"></i>
+                            </div>
+                        </div>
+                        <h2 class="fw-bold mb-0 display-5">@projects.Count</h2>
+                    </div>
+                    <div class="bg-primary" style="height: 4px; width: 100%;"></div>
+                </div>
+            </div>
+
+            <!-- Metric 2: Active Tickets -->
+            <div class="col-md-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden metric-card">
+                    <div class="card-body p-4 position-relative">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="text-muted fw-bold text-uppercase mb-0">Open Tasks</h6>
+                            <div class="icon-box bg-warning bg-opacity-10 text-warning rounded-circle d-flex justify-content-center align-items-center" style="width: 40px; height: 40px;">
+                                <i class="bi bi-ticket-detailed-fill fs-5"></i>
+                            </div>
+                        </div>
+                        <h2 class="fw-bold mb-0 display-5">@tickets.Count</h2>
+                    </div>
+                    <div class="bg-warning" style="height: 4px; width: 100%;"></div>
+                </div>
+            </div>
+
+            <!-- Metric 3: Critical Action Items -->
+            <div class="col-md-4">
+                <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden metric-card">
+                    <div class="card-body p-4 position-relative">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="text-muted fw-bold text-uppercase mb-0">High Priority</h6>
+                            <div class="icon-box bg-danger bg-opacity-10 text-danger rounded-circle d-flex justify-content-center align-items-center" style="width: 40px; height: 40px;">
+                                <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+                            </div>
+                        </div>
+                        <h2 class="fw-bold mb-0 display-5">@highPriorityCount</h2>
+                    </div>
+                    <div class="bg-danger" style="height: 4px; width: 100%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Split: Recent Projects & Priority Tickets -->
+        <div class="row g-4">
+            <!-- Left Column: Recent Projects -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-header bg-white border-bottom-0 pt-4 pb-0 px-4 d-flex justify-content-between align-items-center">
+                        <h5 class="fw-bold mb-0">Latest Initiatives</h5>
+                        <a href="projects" class="btn btn-sm btn-light rounded-pill text-primary fw-medium">View All</a>
+                    </div>
+                    <div class="card-body p-4">
+                        @if (projects.Count == 0)
+                        {
+                            <div class="text-center py-4">
+                                <p class="text-muted mb-0">No projects running yet.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="list-group list-group-flush border-0">
+                                @foreach (var project in projects.Take(3))
+                                {
+                                    <div class="list-group-item px-0 py-3 border-light d-flex align-items-center">
+                                        <div class="bg-light rounded p-3 me-3 text-primary">
+                                            <i class="bi bi-rocket-takeoff-fill"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="fw-bold mb-1">@project.Name</h6>
+                                            <p class="text-muted small mb-0 text-truncate" style="max-width: 250px;">@project.Description</p>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Priority Radar -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-header bg-white border-bottom-0 pt-4 pb-0 px-4">
+                        <h5 class="fw-bold mb-0">Priority Radar</h5>
+                    </div>
+                    <div class="card-body p-4">
+                        @if (tickets.Count == 0)
+                        {
+                            <div class="text-center py-5 rounded-3 bg-light">
+                                <i class="bi bi-check-circle-fill text-success fs-2 mb-2 d-block"></i>
+                                <span class="fw-medium text-muted">Inbox Zero! Team is fully caught up.</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="list-group list-group-flush border-0">
+                                @foreach (var ticket in tickets.Where(t => t.Priority?.ToLower() == "high").Take(4))
+                                {
+                                    <div class="list-group-item px-0 py-3 border-light d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="fw-bold mb-1">@ticket.Title</h6>
+                                            <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-2">High Priority</span>
+                                        </div>
+                                        <button class="btn btn-sm btn-outline-primary rounded-pill">Resolve</button>
+                                    </div>
+                                }
+                                @if (highPriorityCount == 0 && tickets.Count > 0)
+                                {
+                                    <div class="alert alert-info border-0 shadow-none text-center">
+                                        No critical tickets. Great job keeping the backlog clean!
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .metric-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+        .metric-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.06) !important;
+        }
+</style>
+
+@code {
+    private List<Project> projects = new();
+    private List<Ticket> tickets = new();
+    private bool isLoading = true;
+    private int highPriorityCount => tickets.Count(t => t.Priority?.ToLower() == "high");
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 1. We wrap BOTH API calls in individual try-catch blocks.
+        // If the Projects API fails, the Tickets API still tries to load.
+        // If the database is empty, the `?? new()` guarantees the app won't crash.
+
+        try
+        {
+            projects = await Http.GetFromJsonAsync<List<Project>>("api/Projects") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Dashboard (Projects) Error: {ex.Message}");
+            projects = new(); // Failsafe
+        }
+
+        try
+        {
+            tickets = await Http.GetFromJsonAsync<List<Ticket>>("api/Tickets") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Dashboard (Tickets) Error: {ex.Message}");
+            tickets = new(); // Failsafe
+        }
+
+        // 2. Turn off the loading spinner only after ALL data attempts are finished.
+        isLoading = false;
+    }
+}

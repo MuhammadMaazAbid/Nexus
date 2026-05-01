@@ -1,0 +1,229 @@
+﻿@page "/tickets"
+@attribute [Authorize]
+@using Nexus.Shared.Models
+@inject HttpClient Http
+
+<PageTitle>Tickets | Nexus</PageTitle>
+
+<div class="container mt-4 mb-5">
+    
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h1 class="fw-bold mb-0" style="letter-spacing: -0.5px;">Active Tasks</h1>
+            <p class="text-muted mb-0">Track, manage, and resolve team assignments.</p>
+        </div>
+        <button class="btn btn-primary shadow-sm rounded-pill px-4 transition-all" @onclick="ShowModal">
+            <i class="bi bi-plus-lg me-2"></i>New Task
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex flex-column justify-content-center align-items-center mt-5" style="height: 40vh;">
+            <div class="spinner-border text-primary border-3" style="width: 3rem; height: 3rem;" role="status"></div>
+            <p class="text-muted mt-3 fw-medium">Loading task board...</p>
+        </div>
+    }
+    else if (tickets.Count == 0)
+    {
+        <div class="text-center py-5 rounded-4 bg-light border-0 shadow-sm" style="margin-top: 10vh;">
+            <i class="bi bi-check2-circle text-success opacity-50" style="font-size: 4rem;"></i>
+            <h3 class="fw-bold mt-3">Inbox Zero!</h3>
+            <p class="text-muted mx-auto" style="max-width: 400px;">
+                Your team has no active tasks. Enjoy the quiet, or create a new task to get moving.
+            </p>
+            <button class="btn btn-primary rounded-pill px-4 mt-2" @onclick="ShowModal">Assign First Task</button>
+        </div>
+    }
+    else
+    {
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="text-muted fw-semibold small text-uppercase px-4 py-3">Task Details</th>
+                            <th class="text-muted fw-semibold small text-uppercase px-4 py-3">Project ID</th>
+                            <th class="text-muted fw-semibold small text-uppercase px-4 py-3">Status</th>
+                            <th class="text-muted fw-semibold small text-uppercase px-4 py-3">Priority</th>
+                            <th class="text-muted fw-semibold small text-uppercase px-4 py-3 text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="border-top-0">
+                        @foreach (var ticket in tickets)
+                        {
+                            <tr>
+                                <td class="px-4 py-3">
+                                    <h6 class="fw-bold mb-1">@ticket.Title</h6>
+                                    <p class="text-muted small mb-0 text-truncate" style="max-width: 300px;">@ticket.Description</p>
+                                </td>
+                                <td class="px-4 py-3 text-muted fw-medium">
+                                    #( @ticket.ProjectId )
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span class="badge bg-secondary bg-opacity-10 text-secondary rounded-pill border border-secondary border-opacity-25 px-3 py-2">
+                                        @ticket.Status
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span class="badge @GetPriorityCss(ticket.Priority) rounded-pill px-3 py-2">
+                                        @ticket.Priority
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-end">
+                                    <button class="btn btn-sm btn-light text-primary fw-medium rounded-pill px-3">View</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (isModalVisible)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px);">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                    <div class="modal-header border-bottom-0 pt-4 pb-0 px-4">
+                        <h4 class="modal-title fw-bold">Create New Task</h4>
+                        <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold text-muted small text-uppercase">Assign to Project</label>
+                            <select class="form-select form-select-lg bg-light border-0 shadow-none" @bind="newTicket.ProjectId">
+                                <option value="0" disabled selected>-- Select a Project --</option>
+                                @foreach (var p in projects)
+                                {
+                                    <option value="@p.Id">@p.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold text-muted small text-uppercase">Task Title</label>
+                            <input type="text" class="form-control form-control-lg bg-light border-0 shadow-none"
+                                   @bind="newTicket.Title" placeholder="e.g., Design Authentication Flow" />
+                        </div>
+                        
+                        <div class="row mb-4">
+                            <div class="col-6">
+                                <label class="form-label fw-semibold text-muted small text-uppercase">Priority</label>
+                                <select class="form-select bg-light border-0 shadow-none" @bind="newTicket.Priority">
+                                    <option value="Low">Low</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="High">High</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold text-muted small text-uppercase">Status</label>
+                                <select class="form-select bg-light border-0 shadow-none" @bind="newTicket.Status">
+                                    <option value="To Do">To Do</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Done">Done</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold text-muted small text-uppercase">Description</label>
+                            <textarea class="form-control bg-light border-0 shadow-none" rows="3"
+                                      @bind="newTicket.Description" placeholder="Provide task details here..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top-0 pb-4 px-4 bg-light bg-opacity-50">
+                        <button type="button" class="btn btn-link text-muted text-decoration-none px-4" @onclick="CloseModal">Cancel</button>
+                        <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" @onclick="SaveTicket">
+                            <i class="bi bi-check2 me-1"></i> Add Task
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Ticket> tickets = new();
+    private List<Project> projects = new();
+    
+    private bool isLoading = true;
+    private bool isModalVisible = false;
+    
+    private Ticket newTicket = new Ticket { Priority = "Medium", Status = "To Do" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+
+        try
+        {
+            projects = await Http.GetFromJsonAsync<List<Project>>("api/Projects") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Project Fetch Error: {ex.Message}");
+        }
+
+        try
+        {
+            tickets = await Http.GetFromJsonAsync<List<Ticket>>("api/Tickets") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ticket Fetch Error: {ex.Message}");
+        }
+
+        isLoading = false;
+    }
+
+    private void ShowModal()
+    {
+        newTicket = new Ticket { Priority = "Medium", Status = "To Do" };
+        isModalVisible = true;
+    }
+
+    private void CloseModal()
+    {
+        isModalVisible = false;
+    }
+
+    private async Task SaveTicket()
+    {
+        if (string.IsNullOrWhiteSpace(newTicket.Title) || newTicket.ProjectId == 0) return;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/Tickets", newTicket);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadData();
+                CloseModal();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving task: {ex.Message}");
+        }
+    }
+
+    private string GetPriorityCss(string? priority)
+    {
+        return priority?.ToLower() switch
+        {
+            "high" => "bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25",
+            "medium" => "bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25",
+            "low" => "bg-info bg-opacity-10 text-info border border-info border-opacity-25",
+            _ => "bg-light text-dark"
+        };
+    }
+}

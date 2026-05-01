@@ -1,0 +1,99 @@
+﻿@page "/signup"
+@using Nexus.Shared.DTOs
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<div class="container d-flex justify-content-center align-items-center vh-100">
+    <div class="card border-0 shadow-lg rounded-4 p-4" style="max-width: 450px; width: 100%;">
+        <div class="text-center mb-4">
+            <!-- Professional Icon and Branding -->
+            <i class="bi bi-person-plus-fill text-primary display-4"></i>
+            <h2 class="fw-bold mt-2">Join Insightify</h2>
+            <p class="text-muted">Create your secure workspace account</p>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger border-0 small py-2 text-center">@errorMessage</div>
+        }
+
+        <EditForm Model="registerRequest" OnValidSubmit="HandleSignup">
+            <DataAnnotationsValidator />
+            
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-uppercase text-muted">Full Name</label>
+                <InputText class="form-control bg-light border-0 shadow-none"
+                           @bind-Value="registerRequest.FullName"
+                           placeholder="e.g. Maaz Abid" />
+                <ValidationMessage For="@(() => registerRequest.FullName)" class="text-danger small" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-uppercase text-muted">Email Address</label>
+                <InputText type="email" class="form-control bg-light border-0 shadow-none"
+                           @bind-Value="registerRequest.Email"
+                           placeholder="name@example.com" />
+                <ValidationMessage For="@(() => registerRequest.Email)" class="text-danger small" />
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label small fw-bold text-uppercase text-muted">Password</label>
+                <InputText type="password" class="form-control bg-light border-0 shadow-none"
+                           @bind-Value="registerRequest.Password"
+                           placeholder="••••••••" />
+                <ValidationMessage For="@(() => registerRequest.Password)" class="text-danger small" />
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 rounded-pill py-2 fw-bold shadow-sm" disabled="@isProcessing">
+                @if (isProcessing)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                }
+                Register Account
+            </button>
+        </EditForm>
+
+        <div class="text-center mt-4">
+            <p class="small text-muted mb-0">Already have an account?</p>
+            <a href="login" class="text-primary fw-bold text-decoration-none">Sign in here</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RegisterRequest registerRequest = new();
+    private string? errorMessage;
+    private bool isProcessing = false;
+
+    private async Task HandleSignup()
+    {
+        isProcessing = true;
+        errorMessage = null;
+
+        try
+        {
+            // Sending the registration data to your AuthController
+            var response = await Http.PostAsJsonAsync("api/Auth/register", registerRequest);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Navigate to login after successful registration
+                Nav.NavigateTo("login");
+            }
+            else
+            {
+                // Handle specific API errors (e.g., email already exists)
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = !string.IsNullOrEmpty(errorContent) ? errorContent : "Registration failed. Please check your details.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Server connection lost. Ensure Nexus.Api is running.";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}

@@ -1,0 +1,225 @@
+﻿@page "/team"
+@attribute [Authorize]
+@using Nexus.Shared.Models
+@inject HttpClient Http
+
+<PageTitle>Team | Nexus</PageTitle>
+
+<div class="container mt-4 mb-5">
+    
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h1 class="fw-bold mb-0" style="letter-spacing: -0.5px;">Workspace Directory</h1>
+            <p class="text-muted mb-0">Manage the minds behind Insightify.</p>
+        </div>
+        <button class="btn btn-primary shadow-sm rounded-pill px-4 transition-all" @onclick="ShowModal">
+            <i class="bi bi-person-plus-fill me-2"></i>Invite Member
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex flex-column justify-content-center align-items-center mt-5" style="height: 40vh;">
+            <div class="spinner-border text-primary border-3" style="width: 3rem; height: 3rem;" role="status"></div>
+            <p class="text-muted mt-3 fw-medium">Loading team directory...</p>
+        </div>
+    }
+    else if (users.Count == 0)
+    {
+        <div class="text-center py-5 rounded-4 bg-light border-0 shadow-sm" style="margin-top: 10vh;">
+            <i class="bi bi-people text-primary opacity-50" style="font-size: 4rem;"></i>
+            <h3 class="fw-bold mt-3">It's quiet in here</h3>
+            <p class="text-muted mx-auto" style="max-width: 400px;">
+                You are currently the only one in the workspace. Invite your co-founders to start collaborating.
+            </p>
+            <button class="btn btn-primary rounded-pill px-4 mt-2" @onclick="ShowModal">Invite First Member</button>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            @foreach (var user in users)
+            {
+                <div class="col-md-6 col-lg-3">
+                    <div class="card h-100 border-0 shadow-sm rounded-4 team-card overflow-hidden text-center transition-all">
+                        <div class="card-body p-4">
+                            
+                            <div class="avatar-circle mx-auto mb-3 d-flex justify-content-center align-items-center shadow-sm">
+                                <span class="fw-bold fs-4 text-white text-uppercase">@GetInitials(user.FullName)</span>
+                            </div>
+                            
+                            <h5 class="fw-bold mb-1 text-truncate">@user.FullName</h5>
+                            <p class="text-muted small mb-3 text-truncate">@user.Email</p>
+                            
+                            <span class="badge @GetRoleBadgeCss(user.Role) rounded-pill px-3 py-2 fw-medium">
+                                @(string.IsNullOrWhiteSpace(user.Role) ? "Member" : user.Role)
+                            </span>
+                        </div>
+                        <div class="card-footer bg-transparent border-top-0 p-4 pt-0">
+                            <button class="btn btn-light w-100 rounded-pill fw-medium text-primary text-opacity-75 hover-primary">
+                                View Profile
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (isModalVisible)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px);">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                    <div class="modal-header border-bottom-0 pt-4 pb-0 px-4">
+                        <h4 class="modal-title fw-bold">Invite to Workspace</h4>
+                        <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold text-muted small text-uppercase">Full Name</label>
+                            <input type="text" class="form-control form-control-lg bg-light border-0 shadow-none"
+                                   @bind="newUser.FullName" placeholder="e.g., Ali or Ahmed" autofocus />
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold text-muted small text-uppercase">Email Address</label>
+                            <input type="email" class="form-control form-control-lg bg-light border-0 shadow-none"
+                                   @bind="newUser.Email" placeholder="name@insightify.com" />
+                        </div>
+                        
+                        <div class="row mb-2">
+                            <div class="col-6">
+                                <label class="form-label fw-semibold text-muted small text-uppercase">Assign Role</label>
+                                <select class="form-select bg-light border-0 shadow-none" @bind="newUser.Role">
+                                    <option value="Admin">Admin</option>
+                                    <option value="Developer">Developer</option>
+                                    <option value="Designer">Designer</option>
+                                    <option value="Manager">Manager</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold text-muted small text-uppercase">Temporary Password</label>
+                                <input type="password" class="form-control bg-light border-0 shadow-none"
+                                       @bind="newUser.PasswordHash" placeholder="Default123!" />
+                            </div>
+                        </div>
+
+                    </div>
+                    <div class="modal-footer border-top-0 pb-4 px-4 bg-light bg-opacity-50">
+                        <button type="button" class="btn btn-link text-muted text-decoration-none px-4" @onclick="CloseModal">Cancel</button>
+                        <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" @onclick="SaveUser">
+                            <i class="bi bi-send-fill me-1"></i> Send Invite
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .transition-all {
+        transition: all 0.2s ease-in-out;
+    }
+
+    .team-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.08) !important;
+    }
+
+    .avatar-circle {
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    }
+
+    .hover-primary:hover {
+        background-color: #0d6efd !important;
+        color: white !important;
+    }
+</style>
+
+@code {
+    private List<User> users = new();
+    private bool isLoading = true;
+    private bool isModalVisible = false;
+    
+    // Using smart defaults for the dropdown
+    private User newUser = new User { Role = "Developer" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            // Connects to the /api/Users endpoint from your Swagger backend
+            users = await Http.GetFromJsonAsync<List<User>>("api/Users") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"User Fetch Error: {ex.Message}");
+        }
+        isLoading = false;
+    }
+
+    private void ShowModal()
+    {
+        newUser = new User { Role = "Developer" };
+        isModalVisible = true;
+    }
+
+    private void CloseModal()
+    {
+        isModalVisible = false;
+    }
+
+    private async Task SaveUser()
+    {
+        if (string.IsNullOrWhiteSpace(newUser.FullName) || string.IsNullOrWhiteSpace(newUser.Email)) return;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/Users", newUser);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadData();
+                CloseModal();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving user: {ex.Message}");
+        }
+    }
+
+    // Helper: Extracts initials (e.g., "Arslan" -> "A", "Muhammad Maaz" -> "MM")
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "U";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpper();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
+    }
+
+    // Helper: Color-codes roles for visual hierarchy
+    private string GetRoleBadgeCss(string? role)
+    {
+        return role?.ToLower() switch
+        {
+            "admin" => "bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25",
+            "manager" => "bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25",
+            "designer" => "bg-info bg-opacity-10 text-info border border-info border-opacity-25",
+            "developer" => "bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25",
+            _ => "bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25"
+        };
+    }
+}

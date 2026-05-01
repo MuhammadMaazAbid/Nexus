@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Nexus.Api.Data;
 using Nexus.Shared.Models;
@@ -7,6 +8,8 @@ namespace Nexus.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+
+    [Authorize]
     public class TicketsController(AppDbContext context) : ControllerBase
     {
         [HttpGet]
