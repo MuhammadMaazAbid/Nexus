@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="../Nexus.Client/Nexus.Client.csproj" Id="36d968b5-c211-45c2-856d-12bb7c22a58a" />
+  <Project Path="../Nexus.Shared/Nexus.Shared.csproj" Id="2c293c92-5d27-46b3-baf8-32269ed270fd" />
+  <Project Path="Nexus.Api.csproj" />
+</Solution>
