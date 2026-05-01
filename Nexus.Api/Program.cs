@@ -3,23 +3,27 @@ using Nexus.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Database Context Registered First
+// --- ADD THESE TWO LINES ---
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+// ---------------------------
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// 2. Add services to the container.
 builder.Services.AddControllers();
-
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-// 3. Build the App
 var app = builder.Build();
 
-// 4. Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+
+    // --- ADD THESE TWO LINES ---
+    app.UseSwagger();
+    app.UseSwaggerUI();
+    // ---------------------------
 }
 
 app.UseHttpsRedirection();
