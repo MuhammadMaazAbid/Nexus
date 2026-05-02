@@ -1,9 +1,10 @@
 ﻿@page "/team"
+@rendermode InteractiveWebAssembly
 @attribute [Authorize]
 @using Nexus.Shared.Models
 @inject HttpClient Http
 
-<PageTitle>Team | Nexus</PageTitle>
+<PageTitle>Team | Insightify</PageTitle>
 
 <div class="container mt-4 mb-5">
     
@@ -56,9 +57,10 @@
                             </span>
                         </div>
                         <div class="card-footer bg-transparent border-top-0 p-4 pt-0">
-                            <button class="btn btn-light w-100 rounded-pill fw-medium text-primary text-opacity-75 hover-primary">
+                            <!-- FIXED: Changed to an Anchor tag for proper routing -->
+                            <a href="/profile/@user.Id" class="btn btn-light w-100 rounded-pill fw-medium text-primary text-opacity-75 hover-primary d-block text-decoration-none">
                                 View Profile
-                            </button>
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -147,7 +149,6 @@
     private bool isLoading = true;
     private bool isModalVisible = false;
     
-    // Using smart defaults for the dropdown
     private User newUser = new User { Role = "Developer" };
 
     protected override async Task OnInitializedAsync()
@@ -160,7 +161,6 @@
         isLoading = true;
         try
         {
-            // Connects to the /api/Users endpoint from your Swagger backend
             users = await Http.GetFromJsonAsync<List<User>>("api/Users") ?? new();
         }
         catch (Exception ex)
@@ -201,7 +201,6 @@
         }
     }
 
-    // Helper: Extracts initials (e.g., "Arslan" -> "A", "Muhammad Maaz" -> "MM")
     private string GetInitials(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return "U";
@@ -210,7 +209,6 @@
         return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
     }
 
-    // Helper: Color-codes roles for visual hierarchy
     private string GetRoleBadgeCss(string? role)
     {
         return role?.ToLower() switch
