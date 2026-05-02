@@ -2,6 +2,7 @@
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Nav
+@inject HttpClient Http
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -14,8 +15,7 @@
 
 <div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
     <nav class="nav flex-column">
-        
-        <!-- Dashboard: Always visible or public-facing -->
+
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
                 <span class="bi bi-grid-fill" aria-hidden="true"></span> Dashboard
@@ -24,7 +24,6 @@
 
         <AuthorizeView>
             <Authorized>
-                <!-- Private Workspace: Only visible when logged in -->
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="projects">
                         <span class="bi bi-briefcase-fill" aria-hidden="true"></span> Projects
@@ -43,15 +42,60 @@
 
                 <hr class="text-white-50 mx-3" />
 
-                <!-- Logout Button -->
+                @* ── NOTIFICATION BELL ── *@
+                <div class="nav-item px-3 position-relative" @onclick:stopPropagation>
+                    <button class="nav-link btn btn-link text-start w-100 border-0 shadow-none d-flex align-items-center justify-content-between"
+                            @onclick="ToggleBell">
+                        <span>
+                            <span class="bi bi-bell-fill" aria-hidden="true"></span> Notifications
+                        </span>
+                        @if (unreadCount > 0)
+                        {
+                            <span class="badge rounded-pill bg-danger" style="font-size:10px;">@unreadCount</span>
+                        }
+                    </button>
+
+                    @if (isBellOpen)
+                    {
+                        <div class="notif-dropdown" @onclick:stopPropagation
+                             style="left:100%;top:0;right:auto;">
+                            <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                                <span class="fw-bold small text-dark">Notifications</span>
+                                <button class="btn btn-link btn-sm text-muted p-0 text-decoration-none"
+                                        @onclick="MarkAllRead">
+                                    Mark all read
+                                </button>
+                            </div>
+                            @if (!notifications.Any())
+                            {
+                                <div class="px-3 py-4 text-center text-muted small">
+                                    You're all caught up.
+                                </div>
+                            }
+                            @foreach (var n in notifications)
+                            {
+                                <div class="notif-item @(n.IsRead ? "" : "unread")"
+                                     @onclick="() => MarkRead(n.Id)">
+                                    <p class="mb-0 small fw-medium text-dark">@n.Message</p>
+                                    <span class="text-muted" style="font-size:11px;">
+                                        @n.CreatedAt.ToString("MMM d · h:mm tt")
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <hr class="text-white-50 mx-3" />
+
                 <div class="nav-item px-3">
-                    <button class="nav-link btn btn-link text-start w-100 text-danger border-0 shadow-none" @onclick="HandleLogout">
+                    <button class="nav-link btn btn-link text-start w-100 text-danger border-0 shadow-none"
+                            @onclick="HandleLogout">
                         <span class="bi bi-box-arrow-right" aria-hidden="true"></span> Logout
                     </button>
                 </div>
             </Authorized>
             <NotAuthorized>
-                <!-- Login Link: Visible only when logged out -->
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="login">
                         <span class="bi bi-lock-fill" aria-hidden="true"></span> Login
@@ -66,21 +110,68 @@
     private bool collapseNavMenu = true;
     private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
 
-    private void ToggleNavMenu()
+    private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
+
+    // ── Notifications ──
+    private List<NotificationItem> notifications = new();
+    private int unreadCount = 0;
+    private bool isBellOpen = false;
+
+    protected override async Task OnInitializedAsync()
     {
-        collapseNavMenu = !collapseNavMenu;
+        await LoadNotifications();
+    }
+
+    private async Task LoadNotifications()
+    {
+        try
+        {
+            var token = await LocalStorage.GetItemAsStringAsync("authToken");
+            if (string.IsNullOrEmpty(token)) return;
+
+            Http.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.Trim('"'));
+
+            notifications = await Http.GetFromJsonAsync<List<NotificationItem>>("api/Notifications") ?? new();
+            unreadCount = notifications.Count(n => !n.IsRead);
+        }
+        catch { }
+    }
+
+    private async Task ToggleBell()
+    {
+        isBellOpen = !isBellOpen;
+        if (isBellOpen) await LoadNotifications();
+        StateHasChanged();
+    }
+
+    private async Task MarkRead(int id)
+    {
+        await Http.PatchAsync($"api/Notifications/{id}/read", null);
+        await LoadNotifications();
+        StateHasChanged();
+    }
+
+    private async Task MarkAllRead()
+    {
+        await Http.PatchAsync("api/Notifications/read-all", null);
+        await LoadNotifications();
+        StateHasChanged();
     }
 
     private async Task HandleLogout()
     {
-        // 1. Remove the JWT from browser storage
         await LocalStorage.RemoveItemAsync("authToken");
-
-        // 2. Notify the app state that the user is now anonymous
         var customAuthStateProvider = (Nexus.Client.Security.CustomAuthStateProvider)AuthStateProvider;
         customAuthStateProvider.MarkUserAsLoggedOut();
-
-        // 3. Redirect to the login page
         Nav.NavigateTo("login");
+    }
+
+    class NotificationItem
+    {
+        public int Id { get; set; }
+        public string Message { get; set; } = "";
+        public bool IsRead { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
 }

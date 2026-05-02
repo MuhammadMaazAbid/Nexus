@@ -19,14 +19,42 @@ namespace Nexus.Client.Security
 
         public override async Task<AuthenticationState> GetAuthenticationStateAsync()
         {
-            var token = await _localStorage.GetItemAsStringAsync("authToken");
+            string? token = null;
 
-            if (string.IsNullOrWhiteSpace(token))
+            // Retry up to 3 times — localStorage isn't always ready on cold load
+            for (int i = 0; i < 3; i++)
             {
-                return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
+                try
+                {
+                    token = await _localStorage.GetItemAsStringAsync("authToken");
+                    if (!string.IsNullOrWhiteSpace(token)) break;
+                }
+                catch
+                {
+                    // localStorage not ready yet — wait and retry
+                }
+                await Task.Delay(100);
             }
 
-            _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Replace("\"", ""));
+            if (string.IsNullOrWhiteSpace(token))
+                return Anonymous();
+
+            // Strip any extra quotes Blazored sometimes adds
+            token = token.Trim('"');
+
+            // Validate it's a real JWT (3 parts)
+            if (token.Split('.').Length != 3)
+                return Anonymous();
+
+            // Check expiry before trusting it
+            if (IsTokenExpired(token))
+            {
+                await _localStorage.RemoveItemAsync("authToken");
+                return Anonymous();
+            }
+
+            _http.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", token);
 
             var claims = ParseClaimsFromJwt(token);
             var identity = new ClaimsIdentity(claims, "jwt");
@@ -37,6 +65,7 @@ namespace Nexus.Client.Security
 
         public void MarkUserAsAuthenticated(string token)
         {
+            token = token.Trim('"');
             var identity = new ClaimsIdentity(ParseClaimsFromJwt(token), "jwt");
             var user = new ClaimsPrincipal(identity);
             NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(user)));
@@ -48,6 +77,29 @@ namespace Nexus.Client.Security
             NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(anonymous)));
         }
 
+        // ── Helpers ──
+
+        private static AuthenticationState Anonymous() =>
+            new(new ClaimsPrincipal(new ClaimsIdentity()));
+
+        private bool IsTokenExpired(string jwt)
+        {
+            try
+            {
+                var claims = ParseClaimsFromJwt(jwt);
+                var expClaim = claims.FirstOrDefault(c => c.Type == "exp");
+                if (expClaim == null) return false;
+
+                var exp = long.Parse(expClaim.Value);
+                var expiry = DateTimeOffset.FromUnixTimeSeconds(exp);
+                return expiry < DateTimeOffset.UtcNow;
+            }
+            catch
+            {
+                return true; // If we can't parse it, treat as expired
+            }
+        }
+
         private IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
         {
             var payload = jwt.Split('.')[1];
@@ -56,8 +108,9 @@ namespace Nexus.Client.Security
             return keyValuePairs!.Select(kvp => new Claim(kvp.Key, kvp.Value.ToString()!));
         }
 
-        private byte[] ParseBase64WithoutPadding(string base64)
+        private static byte[] ParseBase64WithoutPadding(string base64)
         {
+            base64 = base64.Replace('-', '+').Replace('_', '/');
             switch (base64.Length % 4)
             {
                 case 2: base64 += "=="; break;

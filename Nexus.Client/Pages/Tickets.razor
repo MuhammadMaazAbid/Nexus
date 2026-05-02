@@ -1,229 +1,607 @@
 ﻿@page "/tickets"
 @attribute [Authorize]
+@rendermode InteractiveWebAssembly
 @using Nexus.Shared.Models
+@using Blazored.LocalStorage
+@using System.Text.Json
 @inject HttpClient Http
+@inject IJSRuntime JS
+@inject ILocalStorageService LocalStorage
 
 <PageTitle>Tickets | Nexus</PageTitle>
 
-<div class="container mt-4 mb-5">
-    
-    <div class="d-flex justify-content-between align-items-center mb-5">
+<div class="container-fluid px-4 mt-4 mb-5">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h1 class="fw-bold mb-0" style="letter-spacing: -0.5px;">Active Tasks</h1>
-            <p class="text-muted mb-0">Track, manage, and resolve team assignments.</p>
+            <h1 class="fw-bold mb-0" style="letter-spacing: -0.5px;">Task Board</h1>
+            <p class="text-muted mb-0">Drag tickets across columns to update their status.</p>
         </div>
-        <button class="btn btn-primary shadow-sm rounded-pill px-4 transition-all" @onclick="ShowModal">
-            <i class="bi bi-plus-lg me-2"></i>New Task
-        </button>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm rounded-pill border-0 bg-light shadow-none" style="width:180px"
+                    @onchange="FilterByProject">
+                <option value="0">All Projects</option>
+                @foreach (var p in projects)
+                {
+                    <option value="@p.Id">@p.Name</option>
+                }
+            </select>
+            <button class="btn btn-primary shadow-sm rounded-pill px-4" @onclick="ShowCreateModal">
+                <i class="bi bi-plus-lg me-2"></i>New Task
+            </button>
+        </div>
     </div>
 
     @if (isLoading)
     {
-        <div class="d-flex flex-column justify-content-center align-items-center mt-5" style="height: 40vh;">
-            <div class="spinner-border text-primary border-3" style="width: 3rem; height: 3rem;" role="status"></div>
-            <p class="text-muted mt-3 fw-medium">Loading task board...</p>
-        </div>
-    }
-    else if (tickets.Count == 0)
-    {
-        <div class="text-center py-5 rounded-4 bg-light border-0 shadow-sm" style="margin-top: 10vh;">
-            <i class="bi bi-check2-circle text-success opacity-50" style="font-size: 4rem;"></i>
-            <h3 class="fw-bold mt-3">Inbox Zero!</h3>
-            <p class="text-muted mx-auto" style="max-width: 400px;">
-                Your team has no active tasks. Enjoy the quiet, or create a new task to get moving.
-            </p>
-            <button class="btn btn-primary rounded-pill px-4 mt-2" @onclick="ShowModal">Assign First Task</button>
+        <div class="d-flex justify-content-center align-items-center" style="height:50vh;">
+            <div class="spinner-border text-primary" style="width:3rem;height:3rem;" role="status"></div>
         </div>
     }
     else
     {
-        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="bg-light">
-                        <tr>
-                            <th class="text-muted fw-semibold small text-uppercase px-4 py-3">Task Details</th>
-                            <th class="text-muted fw-semibold small text-uppercase px-4 py-3">Project ID</th>
-                            <th class="text-muted fw-semibold small text-uppercase px-4 py-3">Status</th>
-                            <th class="text-muted fw-semibold small text-uppercase px-4 py-3">Priority</th>
-                            <th class="text-muted fw-semibold small text-uppercase px-4 py-3 text-end">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="border-top-0">
-                        @foreach (var ticket in tickets)
+        <div class="kanban-board">
+            @foreach (var col in columns)
+            {
+                var colTickets = FilteredTickets.Where(t => t.Status == col.Status).ToList();
+                <div class="kanban-column">
+                    <div class="kanban-column-header">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="fw-bold" style="color:@col.Color">@col.Label</span>
+                            <span class="badge rounded-pill" style="background:@col.Color;opacity:0.15;color:@col.Color;font-size:11px;padding:3px 8px;">
+                                @colTickets.Count
+                            </span>
+                        </div>
+                    </div>
+                    <div class="kanban-column-body" data-status="@col.Status">
+                        @foreach (var ticket in colTickets)
                         {
-                            <tr>
-                                <td class="px-4 py-3">
-                                    <h6 class="fw-bold mb-1">@ticket.Title</h6>
-                                    <p class="text-muted small mb-0 text-truncate" style="max-width: 300px;">@ticket.Description</p>
-                                </td>
-                                <td class="px-4 py-3 text-muted fw-medium">
-                                    #( @ticket.ProjectId )
-                                </td>
-                                <td class="px-4 py-3">
-                                    <span class="badge bg-secondary bg-opacity-10 text-secondary rounded-pill border border-secondary border-opacity-25 px-3 py-2">
-                                        @ticket.Status
-                                    </span>
-                                </td>
-                                <td class="px-4 py-3">
-                                    <span class="badge @GetPriorityCss(ticket.Priority) rounded-pill px-3 py-2">
+                            <div class="kanban-card" data-ticket-id="@ticket.Id" @onclick="() => OpenDrawer(ticket.Id)">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <span class="badge @GetPriorityCss(ticket.Priority) rounded-pill px-2 py-1" style="font-size:11px;">
                                         @ticket.Priority
                                     </span>
-                                </td>
-                                <td class="px-4 py-3 text-end">
-                                    <button class="btn btn-sm btn-light text-primary fw-medium rounded-pill px-3">View</button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    }
-
-    @if (isModalVisible)
-    {
-        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px);">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
-                    <div class="modal-header border-bottom-0 pt-4 pb-0 px-4">
-                        <h4 class="modal-title fw-bold">Create New Task</h4>
-                        <button type="button" class="btn-close" @onclick="CloseModal"></button>
-                    </div>
-                    <div class="modal-body p-4">
-                        
-                        <div class="mb-4">
-                            <label class="form-label fw-semibold text-muted small text-uppercase">Assign to Project</label>
-                            <select class="form-select form-select-lg bg-light border-0 shadow-none" @bind="newTicket.ProjectId">
-                                <option value="0" disabled selected>-- Select a Project --</option>
-                                @foreach (var p in projects)
+                                    @if (ticket.ProjectTag != null)
+                                    {
+                                        <span class="badge bg-light text-muted border rounded-pill px-2 py-1" style="font-size:10px;">
+                                            @ticket.ProjectTag
+                                        </span>
+                                    }
+                                </div>
+                                <h6 class="fw-semibold mb-1" style="font-size:14px;line-height:1.4;">@ticket.Title</h6>
+                                @if (!string.IsNullOrEmpty(ticket.Description))
                                 {
-                                    <option value="@p.Id">@p.Name</option>
+                                    <p class="text-muted mb-2" style="font-size:12px;line-height:1.4;
+                                        display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+                                        @ticket.Description
+                                    </p>
                                 }
-                            </select>
-                        </div>
-
-                        <div class="mb-4">
-                            <label class="form-label fw-semibold text-muted small text-uppercase">Task Title</label>
-                            <input type="text" class="form-control form-control-lg bg-light border-0 shadow-none"
-                                   @bind="newTicket.Title" placeholder="e.g., Design Authentication Flow" />
-                        </div>
-                        
-                        <div class="row mb-4">
-                            <div class="col-6">
-                                <label class="form-label fw-semibold text-muted small text-uppercase">Priority</label>
-                                <select class="form-select bg-light border-0 shadow-none" @bind="newTicket.Priority">
-                                    <option value="Low">Low</option>
-                                    <option value="Medium">Medium</option>
-                                    <option value="High">High</option>
-                                </select>
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    <div class="d-flex" style="gap:-4px;">
+                                        @foreach (var assignee in ticket.Assignees.Take(3))
+                                        {
+                                            <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white"
+                                                 style="width:26px;height:26px;font-size:10px;background:#4f46e5;margin-left:-4px;border:2px solid white;"
+                                                 title="@assignee.FullName">
+                                                @GetInitials(assignee.FullName)
+                                            </div>
+                                        }
+                                    </div>
+                                    @if (ticket.DueDate.HasValue)
+                                    {
+                                        <span class="text-muted" style="font-size:11px;">
+                                            <i class="bi bi-calendar3 me-1"></i>@ticket.DueDate.Value.ToString("MMM d")
+                                        </span>
+                                    }
+                                </div>
                             </div>
-                            <div class="col-6">
-                                <label class="form-label fw-semibold text-muted small text-uppercase">Status</label>
-                                <select class="form-select bg-light border-0 shadow-none" @bind="newTicket.Status">
-                                    <option value="To Do">To Do</option>
-                                    <option value="In Progress">In Progress</option>
-                                    <option value="Done">Done</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="mb-2">
-                            <label class="form-label fw-semibold text-muted small text-uppercase">Description</label>
-                            <textarea class="form-control bg-light border-0 shadow-none" rows="3"
-                                      @bind="newTicket.Description" placeholder="Provide task details here..."></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer border-top-0 pb-4 px-4 bg-light bg-opacity-50">
-                        <button type="button" class="btn btn-link text-muted text-decoration-none px-4" @onclick="CloseModal">Cancel</button>
-                        <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" @onclick="SaveTicket">
-                            <i class="bi bi-check2 me-1"></i> Add Task
-                        </button>
+                        }
                     </div>
                 </div>
-            </div>
+            }
         </div>
     }
 </div>
 
+@* ── CREATE TICKET MODAL ── *@
+@if (isModalVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1"
+         style="background-color:rgba(15,23,42,0.6);backdrop-filter:blur(4px);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header border-bottom-0 pt-4 pb-0 px-4">
+                    <h4 class="modal-title fw-bold">Create New Task</h4>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-muted small text-uppercase">Project</label>
+                        <select class="form-select bg-light border-0" @bind="newTicket.ProjectId">
+                            <option value="0" disabled>-- Select Project --</option>
+                            @foreach (var p in projects)
+                            {
+                                <option value="@p.Id">@p.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-muted small text-uppercase">Title</label>
+                        <input type="text" class="form-control bg-light border-0"
+                               @bind="newTicket.Title" placeholder="e.g., Design Authentication Flow" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-muted small text-uppercase">Description</label>
+                        <textarea class="form-control bg-light border-0" rows="2"
+                                  @bind="newTicket.Description"></textarea>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold text-muted small text-uppercase">Priority</label>
+                            <select class="form-select bg-light border-0" @bind="newTicket.Priority">
+                                <option value="Low">Low</option>
+                                <option value="Medium">Medium</option>
+                                <option value="High">High</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold text-muted small text-uppercase">Due Date</label>
+                            <input type="date" class="form-control bg-light border-0"
+                                   @bind="newTicket.DueDate" />
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold text-muted small text-uppercase">Assignees</label>
+                        @foreach (var user in allUsers)
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       id="user_@user.Id"
+                                       checked="@newTicketAssigneeIds.Contains(user.Id)"
+                                       @onchange="e => ToggleAssignee(user.Id, (bool)e.Value!)" />
+                                <label class="form-check-label" for="user_@user.Id">@user.FullName</label>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 pb-4 px-4 bg-light bg-opacity-50">
+                    <button class="btn btn-link text-muted text-decoration-none" @onclick="CloseModal">Cancel</button>
+                    <button class="btn btn-primary rounded-pill px-4" @onclick="SaveTicket" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <span>Adding...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check2 me-1"></i>
+                            <span>Add Task</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── TICKET DRAWER ── *@
+@if (isDrawerOpen && activeTicket != null)
+{
+    <div class="ticket-drawer-overlay" @onclick="CloseDrawer"></div>
+    <div class="ticket-drawer">
+        <div class="ticket-drawer-header">
+            <div style="flex:1;">
+                <span class="badge @GetPriorityCss(activeTicket.Priority) rounded-pill mb-2">@activeTicket.Priority</span>
+                <h5 class="fw-bold mb-0">@activeTicket.Title</h5>
+                <small class="text-muted">@activeTicket.ProjectTag · Created @activeTicket.CreatedAt.ToString("MMM d, yyyy")</small>
+            </div>
+            <button class="btn btn-sm btn-light rounded-circle" style="width:32px;height:32px;" @onclick="CloseDrawer">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+        <div class="ticket-drawer-body">
+
+            @* Description *@
+            <div class="mb-4">
+                <p class="text-muted fw-semibold small text-uppercase mb-1">Description</p>
+                <p class="mb-0">@(string.IsNullOrEmpty(activeTicket.Description) ? "No description provided." : activeTicket.Description)</p>
+            </div>
+
+            @* Meta row *@
+            <div class="row mb-4 g-3">
+                <div class="col-6">
+                    <p class="text-muted fw-semibold small text-uppercase mb-1">Status</p>
+                    <select class="form-select form-select-sm bg-light border-0"
+                            @bind="activeTicket.Status"
+                            @bind:after="() => PatchStatus(activeTicket.Id, activeTicket.Status)">
+                        @foreach (var col in columns)
+                        {
+                            <option value="@col.Status">@col.Label</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-6">
+                    <p class="text-muted fw-semibold small text-uppercase mb-1">Due Date</p>
+                    <p class="mb-0 fw-medium">
+                        @(activeTicket.DueDate.HasValue ? activeTicket.DueDate.Value.ToString("MMM d, yyyy") : "Not set")
+                    </p>
+                </div>
+            </div>
+
+            @* Assignees *@
+            <div class="mb-4">
+                <p class="text-muted fw-semibold small text-uppercase mb-2">Assignees</p>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var assignee in activeTicket.Assignees)
+                    {
+                        <span class="badge bg-light text-dark border rounded-pill px-3 py-2">
+                            <span class="rounded-circle d-inline-flex align-items-center justify-content-center text-white fw-bold me-1"
+                                  style="width:18px;height:18px;font-size:9px;background:#4f46e5;">
+                                @GetInitials(assignee.FullName)
+                            </span>
+                            @assignee.FullName
+                        </span>
+                    }
+                    @if (!activeTicket.Assignees.Any())
+                    {
+                        <span class="text-muted small">No assignees yet.</span>
+                    }
+                </div>
+            </div>
+
+            @* Activity Log *@
+            <div class="mb-4">
+                <p class="text-muted fw-semibold small text-uppercase mb-2">Activity</p>
+                @if (!activeTicket.ActivityLogs.Any())
+                {
+                    <p class="text-muted small">No activity yet.</p>
+                }
+                @foreach (var log in activeTicket.ActivityLogs)
+                {
+                    <div class="d-flex gap-2 mb-2 align-items-start">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0"
+                             style="width:26px;height:26px;font-size:10px;background:#6366f1;margin-top:2px;">
+                            @GetInitials(log.AuthorName)
+                        </div>
+                        <div>
+                            <span class="fw-semibold small">@log.AuthorName</span>
+                            <span class="text-muted small"> @log.Action</span>
+                            <div class="text-muted" style="font-size:11px;">@log.CreatedAt.ToString("MMM d · h:mm tt")</div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @* Comments *@
+            <div>
+                <p class="text-muted fw-semibold small text-uppercase mb-2">Comments</p>
+                @foreach (var comment in drawerComments)
+                {
+                    <div class="d-flex gap-2 mb-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0"
+                             style="width:32px;height:32px;font-size:11px;background:#4f46e5;">
+                            @GetInitials(comment.AuthorName)
+                        </div>
+                        <div class="bg-light rounded-3 px-3 py-2 flex-grow-1">
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-semibold small">@comment.AuthorName</span>
+                                <span class="text-muted" style="font-size:11px;">@comment.CreatedAt.ToString("MMM d")</span>
+                            </div>
+                            <p class="mb-0 small mt-1">@comment.Text</p>
+                        </div>
+                    </div>
+                }
+                <div class="d-flex gap-2 mt-3">
+                    <input type="text" class="form-control form-control-sm bg-light border-0 rounded-pill"
+                           placeholder="Add a comment... use @@name to mention"
+                           @bind="newCommentText"
+                           @onkeydown="HandleCommentKey" />
+                    <button class="btn btn-primary btn-sm rounded-pill px-3" @onclick="PostComment">
+                        <i class="bi bi-send"></i>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+}
+
 @code {
-    private List<Ticket> tickets = new();
+    // ── Column definitions ──
+    record KanbanColumn(string Status, string Label, string Color);
+    private readonly List<KanbanColumn> columns = new()
+    {
+        new("To Do",      "To Do",       "#6366f1"),
+        new("In Progress","In Progress", "#f59e0b"),
+        new("In Review",  "In Review",   "#3b82f6"),
+        new("Done",       "Done",        "#22c55e"),
+    };
+
+    // ── State ──
+    private List<TicketCard> tickets = new();
     private List<Project> projects = new();
-    
+    private List<User> allUsers = new();
     private bool isLoading = true;
+    private int filterProjectId = 0;
+
+    // Create modal
     private bool isModalVisible = false;
-    
-    private Ticket newTicket = new Ticket { Priority = "Medium", Status = "To Do" };
+    private bool isSaving = false;
+    private CreateTicketDto newTicket = new();
+    private List<int> newTicketAssigneeIds = new();
+
+    // Drawer
+    private bool isDrawerOpen = false;
+    private TicketDetail? activeTicket = null;
+    private List<CommentDto> drawerComments = new();
+    private string newCommentText = string.Empty;
+
+    private DotNetObjectReference<Tickets>? dotNetRef;
+    private bool kanbanInitialized = false;
+
+    private IEnumerable<TicketCard> FilteredTickets =>
+        filterProjectId == 0 ? tickets : tickets.Where(t => t.ProjectId == filterProjectId);
 
     protected override async Task OnInitializedAsync()
     {
+        dotNetRef = DotNetObjectReference.Create(this);
+
+        var token = await LocalStorage.GetItemAsStringAsync("authToken");
+        Http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token?.Trim('"'));
+
         await LoadData();
+    }
+
+    // --- NEW: Simplified OnAfterRenderAsync handling Sortable re-init automatically ---
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!isLoading && !kanbanInitialized)
+        {
+            try
+            {
+                dotNetRef ??= DotNetObjectReference.Create(this);
+                await JS.InvokeVoidAsync("initKanban", dotNetRef);
+                kanbanInitialized = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Kanban init error: {ex.Message}");
+            }
+        }
     }
 
     private async Task LoadData()
     {
         isLoading = true;
+        StateHasChanged();
 
         try
         {
             projects = await Http.GetFromJsonAsync<List<Project>>("api/Projects") ?? new();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Project Fetch Error: {ex.Message}");
-        }
+            allUsers = await Http.GetFromJsonAsync<List<User>>("api/Users") ?? new();
 
-        try
-        {
-            tickets = await Http.GetFromJsonAsync<List<Ticket>>("api/Tickets") ?? new();
+            var raw = await Http.GetFromJsonAsync<List<TicketCard>>("api/Tickets") ?? new();
+
+            // Attach project name tag
+            foreach (var t in raw)
+            {
+                var proj = projects.FirstOrDefault(p => p.Id == t.ProjectId);
+                t.ProjectTag = proj?.Name;
+            }
+            tickets = raw;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Ticket Fetch Error: {ex.Message}");
+            Console.WriteLine($"LoadData error: {ex.Message}");
         }
 
         isLoading = false;
+        StateHasChanged();
     }
 
-    private void ShowModal()
+    // ── Drag & Drop callback ──
+    [JSInvokable]
+    public async Task OnTicketDropped(int ticketId, string newStatus)
     {
-        newTicket = new Ticket { Priority = "Medium", Status = "To Do" };
+        var ticket = tickets.FirstOrDefault(t => t.Id == ticketId);
+        if (ticket == null) return;
+        ticket.Status = newStatus;
+        StateHasChanged();
+        await PatchStatus(ticketId, newStatus);
+    }
+
+    private async Task PatchStatus(int ticketId, string newStatus)
+    {
+        try
+        {
+            await Http.PatchAsJsonAsync($"api/Tickets/{ticketId}/status",
+                new { Status = newStatus });
+
+            // Sync the board card immediately — don't wait for full reload
+            var boardTicket = tickets.FirstOrDefault(t => t.Id == ticketId);
+            if (boardTicket != null)
+            {
+                boardTicket.Status = newStatus;
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Status update error: {ex.Message}");
+        }
+    }
+
+    // ── Drawer ──
+    private async Task OpenDrawer(int ticketId)
+    {
+        isDrawerOpen = true;
+        activeTicket = null;
+        drawerComments = new();
+
+        try
+        {
+            activeTicket = await Http.GetFromJsonAsync<TicketDetail>($"api/Tickets/{ticketId}");
+            if (activeTicket != null)
+            {
+                var proj = projects.FirstOrDefault(p => p.Id == activeTicket.ProjectId);
+                activeTicket.ProjectTag = proj?.Name;
+
+                drawerComments = await Http.GetFromJsonAsync<List<CommentDto>>(
+                    $"api/Comments?ticketId={ticketId}") ?? new();
+            }
+        }
+        catch (Exception ex) { Console.WriteLine(ex.Message); }
+    }
+
+    private void CloseDrawer() { isDrawerOpen = false; activeTicket = null; }
+
+    // ── Comments ──
+    private async Task PostComment()
+    {
+        if (string.IsNullOrWhiteSpace(newCommentText) || activeTicket == null) return;
+
+        var payload = new { Text = newCommentText, TicketId = activeTicket.Id };
+        var response = await Http.PostAsJsonAsync("api/Comments", payload);
+
+        if (response.IsSuccessStatusCode)
+        {
+            newCommentText = string.Empty;
+            drawerComments = await Http.GetFromJsonAsync<List<CommentDto>>(
+                $"api/Comments?ticketId={activeTicket.Id}") ?? new();
+        }
+    }
+
+    private async Task HandleCommentKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await PostComment();
+    }
+
+    // ── Create Modal ──
+    private void ShowCreateModal()
+    {
+        newTicket = new CreateTicketDto { Priority = "Medium" };
+        newTicketAssigneeIds = new();
         isModalVisible = true;
     }
 
-    private void CloseModal()
+    private void CloseModal() => isModalVisible = false;
+
+    private void ToggleAssignee(int userId, bool isChecked)
     {
-        isModalVisible = false;
+        if (isChecked) newTicketAssigneeIds.Add(userId);
+        else newTicketAssigneeIds.Remove(userId);
     }
 
+    // --- NEW: Simplified SaveTicket using component lifecycle instead of arbitrary delays ---
     private async Task SaveTicket()
     {
         if (string.IsNullOrWhiteSpace(newTicket.Title) || newTicket.ProjectId == 0) return;
 
+        isSaving = true;
+        StateHasChanged();
+
+        var payload = new
+        {
+            newTicket.Title,
+            newTicket.Description,
+            newTicket.Priority,
+            newTicket.ProjectId,
+            newTicket.DueDate,
+            AssigneeIds = newTicketAssigneeIds
+        };
+
         try
         {
-            var response = await Http.PostAsJsonAsync("api/Tickets", newTicket);
-            
+            var response = await Http.PostAsJsonAsync("api/Tickets", payload);
             if (response.IsSuccessStatusCode)
             {
-                await LoadData();
                 CloseModal();
+                kanbanInitialized = false; // This triggers OnAfterRenderAsync to re-init
+                await LoadData();          // Triggers StateHasChanged automatically inside LoadData
             }
         }
-        catch (Exception ex)
+        finally
         {
-            Console.WriteLine($"Error saving task: {ex.Message}");
+            isSaving = false;
+            StateHasChanged();
         }
     }
 
-    private string GetPriorityCss(string? priority)
+    // ── Filters ──
+    private void FilterByProject(ChangeEventArgs e)
     {
-        return priority?.ToLower() switch
-        {
-            "high" => "bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25",
-            "medium" => "bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25",
-            "low" => "bg-info bg-opacity-10 text-info border border-info border-opacity-25",
-            _ => "bg-light text-dark"
-        };
+        filterProjectId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+    }
+
+    // ── Helpers ──
+    private string GetInitials(string name)
+    {
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2
+            ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
+            : name.Length >= 2 ? name[..2].ToUpper() : name.ToUpper();
+    }
+
+    private string GetPriorityCss(string? priority) => priority?.ToLower() switch
+    {
+        "high" => "bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25",
+        "medium" => "bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25",
+        "low" => "bg-info bg-opacity-10 text-info border border-info border-opacity-25",
+        _ => "bg-light text-dark"
+    };
+
+    // ── Local DTOs ──
+    class TicketCard
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string Priority { get; set; } = "";
+        public string Status { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public DateTime? DueDate { get; set; }
+        public int ProjectId { get; set; }
+        public string? ProjectTag { get; set; }
+        public List<AssigneeDto> Assignees { get; set; } = new();
+    }
+
+    class TicketDetail : TicketCard
+    {
+        public List<CommentDto> Comments { get; set; } = new();
+        public List<ActivityLogDto> ActivityLogs { get; set; } = new();
+    }
+
+    class AssigneeDto
+    {
+        public int UserId { get; set; }
+        public string FullName { get; set; } = "";
+    }
+
+    class CommentDto
+    {
+        public int Id { get; set; }
+        public string Text { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public int UserId { get; set; }
+        public string AuthorName { get; set; } = "";
+    }
+
+    class ActivityLogDto
+    {
+        public int Id { get; set; }
+        public string Action { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public string AuthorName { get; set; } = "";
+    }
+
+    class CreateTicketDto
+    {
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string Priority { get; set; } = "Medium";
+        public int ProjectId { get; set; }
+        public DateTime? DueDate { get; set; }
     }
 }
